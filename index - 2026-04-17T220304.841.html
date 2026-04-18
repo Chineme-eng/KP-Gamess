@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DEEP DIVE — KP GAMES</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ocean0: #001122; --ocean1: #000e1c; --ocean2: #000814;
+    --ocean3: #00050e; --ocean4: #000208; --abyss: #000000;
+    --text: #c8ffc8; --text2: #6aaa6a; --text3: #3a6a3a;
+    --accent: #4ade80; --accent2: #22c55e;
+    --border: #1a3a1a; --border2: #2a5a2a;
+    --glow: rgba(74,222,128,0.15); --glow2: rgba(74,222,128,0.35);
+    --water: rgba(0,100,200,0.15);
+    --bg: #060a06; --bg2: #0c140c;
+  }
+  [data-theme="light"] {
+    --bg: #e8f4f8; --bg2: #d0e8f0; --text: #002244; --text2: #004488; --text3: #0066aa;
+    --accent: #0066cc; --accent2: #0044aa; --border: #aaccee; --border2: #88aadd;
+    --glow: rgba(0,102,204,0.10); --glow2: rgba(0,102,204,0.25);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; }
+
+  body {
+    font-family: 'Share Tech Mono', monospace;
+    background: var(--bg); color: var(--text);
+    display: flex; flex-direction: column;
+    transition: background 0.5s, color 0.3s;
+    position: relative; overflow: hidden;
+  }
+
+  /* Header */
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 1.2rem; height: 50px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg2); flex-shrink: 0; position: relative; z-index: 10;
+  }
+  .logo { font-family: 'Orbitron', monospace; font-size: 11px; font-weight: 700; color: var(--accent); letter-spacing: 0.15em; text-decoration: none; }
+  .header-right { display: flex; gap: 6px; align-items: center; }
+  .icon-btn { width: 32px; height: 32px; border-radius: 3px; border: 1px solid var(--border2); background: transparent; color: var(--accent); cursor: pointer; font-size: 13px; display: flex; align-items: center; justify-content: center; transition: background 0.2s; }
+  .icon-btn:hover { background: var(--glow); }
+
+  /* Ocean canvas wrapper */
+  #oceanWrap {
+    flex: 1; position: relative; overflow: hidden;
+    background: var(--ocean0);
+    transition: background 1.5s ease;
+  }
+
+  /* Animated bubbles */
+  .bubble {
+    position: absolute; border-radius: 50%;
+    background: rgba(100,200,255,0.06);
+    border: 1px solid rgba(100,200,255,0.12);
+    animation: bubbleRise var(--dur) ease-in var(--delay) infinite;
+    pointer-events: none;
+  }
+  @keyframes bubbleRise {
+    from { transform: translateY(0) translateX(0); opacity: 0; }
+    10% { opacity: 1; }
+    90% { opacity: 0.5; }
+    to { transform: translateY(-100vh) translateX(var(--drift)); opacity: 0; }
+  }
+
+  /* Center content */
+  .center {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: clamp(0.8rem, 2vh, 1.5rem);
+    padding: 1rem;
+    z-index: 5;
+  }
+
+  /* Depth gauge */
+  .gauge-wrap {
+    position: absolute; left: 1rem; top: 50%; transform: translateY(-50%);
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    z-index: 10;
+  }
+  .gauge-label { font-size: 9px; color: var(--text3); letter-spacing: 0.1em; }
+  .gauge-track {
+    width: 8px; height: clamp(80px, 25vh, 160px);
+    background: rgba(0,0,0,0.4); border: 1px solid var(--border2);
+    border-radius: 4px; overflow: hidden; position: relative;
+  }
+  .gauge-fill {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    background: linear-gradient(to top, #0066ff, var(--accent2));
+    transition: height 0.8s ease;
+  }
+  .gauge-marker {
+    font-size: 10px; color: var(--accent); font-weight: bold;
+    font-family: 'Orbitron', monospace; letter-spacing: 0.04em;
+  }
+
+  /* Depth readout */
+  .depth-readout {
+    text-align: center;
+  }
+  .depth-num {
+    font-family: 'Orbitron', monospace;
+    font-size: clamp(2rem, 8vw, 4rem);
+    font-weight: 900; color: var(--accent);
+    text-shadow: 0 0 40px var(--glow2), 0 0 80px var(--glow);
+    line-height: 1;
+    transition: color 1s;
+  }
+  .depth-unit { font-size: clamp(12px, 2vw, 16px); color: var(--text3); letter-spacing: 0.2em; margin-top: 4px; }
+  .depth-zone { font-size: clamp(10px, 1.5vw, 13px); color: var(--text2); letter-spacing: 0.15em; margin-top: 4px; font-style: italic; }
+
+  /* Encounter card */
+  .encounter {
+    background: rgba(0,0,0,0.7); border: 1px solid var(--border2);
+    border-radius: 8px; padding: 1rem 1.5rem; text-align: center;
+    max-width: min(400px, 90vw);
+    backdrop-filter: blur(4px);
+    transform: scale(0.8); opacity: 0;
+    transition: transform 0.4s cubic-bezier(0.34,1.56,0.64,1), opacity 0.3s;
+  }
+  .encounter.show { transform: scale(1); opacity: 1; }
+  .encounter-emoji { font-size: clamp(1.8rem, 5vw, 2.5rem); margin-bottom: 8px; display: block; }
+  .encounter-title { font-family: 'Orbitron', monospace; font-size: clamp(11px, 2vw, 14px); font-weight: 700; color: var(--accent); margin-bottom: 6px; letter-spacing: 0.06em; }
+  .encounter-text { font-size: clamp(10px, 1.8vw, 12px); color: var(--text2); line-height: 1.6; }
+
+  /* Dive button */
+  .dive-btn {
+    font-family: 'Orbitron', monospace;
+    font-size: clamp(11px, 2vw, 14px); font-weight: 700;
+    letter-spacing: 0.12em; padding: clamp(10px, 2vh, 14px) clamp(1.5rem, 5vw, 2.5rem);
+    border: 2px solid var(--accent2);
+    background: rgba(0,100,50,0.15);
+    color: var(--accent); border-radius: 4px;
+    cursor: pointer; transition: all 0.2s;
+    backdrop-filter: blur(4px);
+    touch-action: manipulation; user-select: none;
+  }
+  .dive-btn:hover { background: rgba(74,222,128,0.15); box-shadow: 0 0 20px var(--glow2); }
+  .dive-btn:active { transform: scale(0.97); }
+  .dive-btn:disabled { border-color: var(--border); color: var(--text3); cursor: default; background: transparent; }
+
+  /* Surface btn */
+  .surface-btn {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px; letter-spacing: 0.1em;
+    padding: 6px 16px; border-radius: 3px;
+    border: 1px solid var(--border2); background: transparent;
+    color: var(--text3); cursor: pointer; transition: all 0.2s;
+  }
+  .surface-btn:hover { color: var(--text); border-color: var(--accent2); }
+
+  /* Pressure warning */
+  .pressure {
+    font-size: clamp(9px, 1.5vw, 11px); color: var(--text3);
+    letter-spacing: 0.1em; text-align: center;
+    transition: color 1s;
+  }
+
+  /* Edge creatures */
+  .creature {
+    position: absolute; font-size: clamp(1.5rem, 4vw, 2.5rem);
+    opacity: 0; pointer-events: none;
+    transition: opacity 2s, transform 3s;
+    z-index: 3;
+  }
+  .creature.appear { opacity: 0.7; }
+
+  /* Scan line overlay */
+  .scanlines {
+    position: absolute; inset: 0; pointer-events: none; z-index: 8;
+    background: repeating-linear-gradient(0deg, rgba(0,0,0,0.03) 0px, transparent 1px, transparent 3px);
+  }
+
+  /* Vignette */
+  .vignette {
+    position: absolute; inset: 0; pointer-events: none; z-index: 4;
+    background: radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.6) 100%);
+    transition: opacity 1s;
+  }
+
+  /* Game over / result */
+  .result-screen {
+    position: absolute; inset: 0; z-index: 20;
+    background: rgba(0,0,0,0.9); backdrop-filter: blur(8px);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 1rem; padding: 1.5rem;
+    opacity: 0; pointer-events: none; transition: opacity 0.5s;
+    text-align: center;
+  }
+  .result-screen.show { opacity: 1; pointer-events: all; }
+  .result-emoji { font-size: clamp(2.5rem, 8vw, 4rem); }
+  .result-title { font-family: 'Orbitron', monospace; font-size: clamp(1rem, 3vw, 1.5rem); font-weight: 900; color: var(--accent); letter-spacing: 0.08em; }
+  .result-depth { font-size: clamp(2rem, 6vw, 3rem); font-family: 'Orbitron', monospace; font-weight: 900; color: var(--accent); text-shadow: 0 0 40px var(--glow2); }
+  .result-sub { font-size: clamp(11px, 2vw, 13px); color: var(--text2); line-height: 1.7; max-width: 360px; }
+  .result-rank { font-size: clamp(12px, 2vw, 14px); color: var(--text3); letter-spacing: 0.1em; font-style: italic; }
+  .result-btns { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 0.5rem; }
+  .result-btn { font-family: 'Orbitron', monospace; font-size: 11px; letter-spacing: 0.1em; padding: 10px 20px; border-radius: 3px; border: 2px solid var(--accent2); background: transparent; color: var(--accent); cursor: pointer; transition: all 0.2s; }
+  .result-btn:hover { background: var(--accent); color: var(--bg); }
+  .result-btn.secondary { border-color: var(--border2); color: var(--text3); }
+  .result-btn.secondary:hover { background: var(--border2); color: var(--text); }
+  .best-depth { font-size: 11px; color: var(--text3); letter-spacing: 0.1em; }
+
+  /* Toast */
+  .toast { position: fixed; top: 70px; left: 50%; transform: translateX(-50%) translateY(-10px); background: var(--accent); color: var(--bg); font-family: 'Share Tech Mono', monospace; font-size: 12px; letter-spacing: 0.1em; padding: 8px 18px; border-radius: 4px; opacity: 0; transition: all 0.25s ease; z-index: 5000; pointer-events: none; white-space: nowrap; }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* Journal */
+  .journal-btn { position: absolute; right: 1rem; top: 50%; transform: translateY(-50%); z-index: 10; }
+  .journal-panel {
+    position: absolute; right: 0; top: 50px; bottom: 0; width: min(280px, 80vw);
+    background: rgba(0,0,0,0.92); border-left: 1px solid var(--border2);
+    z-index: 15; padding: 1rem; overflow-y: auto;
+    transform: translateX(100%); transition: transform 0.3s ease;
+    backdrop-filter: blur(8px);
+  }
+  .journal-panel.open { transform: translateX(0); }
+  .journal-title { font-family: 'Orbitron', monospace; font-size: 12px; color: var(--accent); letter-spacing: 0.1em; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border); }
+  .journal-entry { font-size: 11px; color: var(--text2); padding: 6px 0; border-bottom: 1px solid var(--border); line-height: 1.5; }
+  .journal-entry .entry-depth { color: var(--accent2); font-weight: bold; }
+  .journal-empty { font-size: 11px; color: var(--text3); font-style: italic; }
+</style>
+</head>
+<body>
+<div class="toast" id="toast"></div>
+
+<header>
+  <a class="logo" href="index.html">◀ KP GAMES</a>
+  <div class="header-right">
+    <button class="icon-btn" id="soundBtn" onclick="toggleSound()">🔊</button>
+    <button class="icon-btn" id="themeBtn" onclick="toggleTheme()">🌙</button>
+  </div>
+</header>
+
+<div id="oceanWrap">
+  <div class="scanlines"></div>
+  <div class="vignette" id="vignette"></div>
+  <div id="bubbleContainer"></div>
+  <div id="creatureContainer"></div>
+
+  <!-- Depth gauge (left) -->
+  <div class="gauge-wrap" id="gaugeWrap">
+    <div class="gauge-label">DEPTH</div>
+    <div class="gauge-track"><div class="gauge-fill" id="gaugeFill" style="height:0%"></div></div>
+    <div class="gauge-marker" id="gaugeMarker">0m</div>
+  </div>
+
+  <!-- Journal button (right) -->
+  <div class="journal-btn">
+    <button class="icon-btn" onclick="toggleJournal()" title="Depth Journal">📓</button>
+  </div>
+
+  <!-- Journal panel -->
+  <div class="journal-panel" id="journalPanel">
+    <div class="journal-title">📓 DEPTH JOURNAL</div>
+    <div id="journalEntries"><div class="journal-empty">No dives recorded yet.</div></div>
+  </div>
+
+  <!-- Main content -->
+  <div class="center" id="mainCenter">
+
+    <div class="depth-readout">
+      <div class="depth-num" id="depthNum">0</div>
+      <div class="depth-unit">METRES BELOW SURFACE</div>
+      <div class="depth-zone" id="depthZone">SUNLIGHT ZONE</div>
+    </div>
+
+    <div class="encounter" id="encounter">
+      <span class="encounter-emoji" id="encEmoji">🌊</span>
+      <div class="encounter-title" id="encTitle">SURFACE</div>
+      <div class="encounter-text" id="encText">The water is warm and clear. Light filters down from above. Everything feels safe.</div>
+    </div>
+
+    <button class="dive-btn" id="diveBtn" onclick="dive()">▼ DIVE DEEPER</button>
+
+    <div class="pressure" id="pressureText">PRESSURE: 1 ATM · TEMP: 20°C</div>
+
+    <button class="surface-btn" id="surfaceBtn" onclick="surface()" style="display:none">↑ SURFACE NOW</button>
+
+  </div>
+
+  <!-- Result screen -->
+  <div class="result-screen" id="resultScreen">
+    <div class="result-emoji" id="resultEmoji">🏁</div>
+    <div class="result-title" id="resultTitle">SURFACED</div>
+    <div class="result-depth" id="resultDepth">0m</div>
+    <div class="result-rank" id="resultRank"></div>
+    <div class="result-sub" id="resultSub"></div>
+    <div class="best-depth" id="bestDepthDisplay"></div>
+    <div class="result-btns">
+      <button class="result-btn" onclick="restart()">▼ DIVE AGAIN</button>
+      <button class="result-btn secondary" onclick="shareResult()">[ SHARE ]</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const ZONES = [
+  { name: 'SUNLIGHT ZONE', maxDepth: 200, bgColor: '#001833', textColor: '#4ade80', pressure: '1-20 ATM', temp: '20-4°C' },
+  { name: 'TWILIGHT ZONE', maxDepth: 1000, bgColor: '#000d1f', textColor: '#38bdf8', pressure: '20-100 ATM', temp: '4-0°C' },
+  { name: 'MIDNIGHT ZONE', maxDepth: 4000, bgColor: '#000814', textColor: '#a78bfa', pressure: '100-400 ATM', temp: '-1°C' },
+  { name: 'ABYSSAL ZONE', maxDepth: 6000, bgColor: '#000408', textColor: '#f87171', pressure: '400-600 ATM', temp: '-2°C' },
+  { name: 'HADAL ZONE', maxDepth: 11000, bgColor: '#000002', textColor: '#fbbf24', pressure: '600+ ATM', temp: '-2°C' },
+];
+
+const ENCOUNTERS = [
+  // Surface (0-50m)
+  { min:0, max:50, emoji:'🌊', title:'SURFACE', text:'Warm waves above. Sunlight refracts in shafts of gold. A seagull cries in the distance.' },
+  { min:0, max:100, emoji:'🐠', title:'REEF FISH', text:'A flash of orange and white. A clownfish peers at you from a nearby anemone.' },
+  { min:20, max:150, emoji:'🌿', title:'KELP FOREST', text:'Giant kelp sways in slow motion. Fish dart between the fronds. It is beautiful here.' },
+  { min:50, max:200, emoji:'🐢', title:'SEA TURTLE', text:'An ancient sea turtle glides past, unconcerned. It has seen deeper things than you.' },
+  { min:80, max:200, emoji:'🦈', title:'REEF SHARK', text:'A grey reef shark circles at a distance. It is not interested in you. Probably.' },
+  // Twilight (200-1000m)
+  { min:200, max:500, emoji:'🦑', title:'GIANT SQUID', text:'A pale shape drifts in the fading blue. You cannot tell how large it is. You do not want to know.' },
+  { min:200, max:600, emoji:'🔵', title:'BIOLUMINESCENCE', text:'Something in the dark below pulsed once. Blue. Then nothing. You are not alone.' },
+  { min:300, max:700, emoji:'🪼', title:'DEEP JELLYFISH', text:'A translucent creature the size of a dinner plate drifts past, trailing twenty-foot tentacles.' },
+  { min:400, max:900, emoji:'🐟', title:'LANTERNFISH', text:'Thousands of tiny glowing fish form a wall of light. Then they part. Something made them move.' },
+  { min:600, max:1000, emoji:'😶', title:'PRESSURE', text:'The weight above you is immense. Your ears ache. The light from the surface is just a rumour now.' },
+  // Midnight (1000-4000m)
+  { min:1000, max:1500, emoji:'👁️', title:'SOMETHING WATCHING', text:'A bioluminescent eye, the size of a volleyball, blinks at you from the dark. Then disappears.' },
+  { min:1000, max:2000, emoji:'🦴', title:'WHALE FALL', text:'The skeleton of a whale rests on the slope. A century of life feeds from it. It is beautiful and wrong.' },
+  { min:1200, max:2500, emoji:'🫧', title:'HYDROTHERMAL VENT', text:'Superheated water shimmers from a crack in the seafloor. Life thrives here impossibly.' },
+  { min:1500, max:3000, emoji:'🐙', title:'DUMBO OCTOPUS', text:'A pale octopus with ear-like fins pulses gently upward. It has lived here its entire life, alone.' },
+  { min:2000, max:3500, emoji:'🔮', title:'DEEP CURRENT', text:'An underwater river, colder than ice, flows through the dark. You can feel it against your suit.' },
+  { min:2500, max:4000, emoji:'⚫', title:'THE VOID', text:'For a moment there is absolutely nothing in any direction. Just you and the crushing dark.' },
+  // Abyss (4000-6000m)
+  { min:4000, max:5000, emoji:'🌑', title:'ABYSSAL PLAIN', text:'You reach the bottom of the known world. Flat. Featureless. The sediment hasn't been disturbed in centuries.' },
+  { min:4000, max:5500, emoji:'🕳️', title:'TRENCH ENTRANCE', text:'A slit in the earth\'s crust descends beyond your lights. Something pale moves at its edge.' },
+  { min:4500, max:5500, emoji:'🧊', title:'METHANE ICE', text:'Frozen methane covers the rocks like snow. Bacteria eat it. Slowly. This has been happening since before humans.' },
+  { min:5000, max:6000, emoji:'📡', title:'LOST SIGNAL', text:'Your comms crackle. Then silence. Whatever was above you is too far away to help you now.' },
+  // Hadal (6000m+)
+  { min:6000, max:7000, emoji:'🌀', title:'THE HADAL ZONE', text:'Only seven species have ever lived here. You shouldn\'t be here. They don\'t know that yet.' },
+  { min:6500, max:8000, emoji:'🐛', title:'HADAL AMPHIPOD', text:'Tiny crustaceans swarm your lights. Billions of them. They carry the memory of every ship that ever sank.' },
+  { min:7000, max:9000, emoji:'📜', title:'OLD MESSAGE', text:'A piece of paper floats past. The handwriting is unreadable. The date is 1943.' },
+  { min:8000, max:10000, emoji:'🪞', title:'REFLECTION', text:'Your light catches something. A reflective surface. You look at it for a long time. You do not want to look at it.' },
+  { min:9000, max:10900, emoji:'😶‍🌫️', title:'THE DEEPEST DEEP', text:'The Mariana Trench. The absolute bottom. No one can hear you. No one is looking. Keep going.' },
+  { min:10000, max:11000, emoji:'🏔️', title:'CHALLENGER DEEP', text:'10,994 metres. The deepest known point on Earth. You are one of fewer than 20 humans to reach this depth. In fiction.' },
+  // Beyond
+  { min:11001, max:99999, emoji:'❓', title:'BEYOND KNOWN DEPTH', text:'This depth does not exist on any map. The pressure would kill you instantly. The numbers no longer have meaning. What are you?' },
+];
+
+const SURFACE_MESSAGES = [
+  { maxDepth: 200, emoji:'🌊', title:'SHALLOW DIVE', rank:'WADER', sub:'You barely got your feet wet. The ocean goes much deeper than this.' },
+  { maxDepth: 500, emoji:'🤿', title:'RECREATIONAL DIVER', rank:'SNORKELER', sub:'You saw some fish. A nice start. But you didn\'t see what\'s below.' },
+  { maxDepth: 1000, emoji:'🦑', title:'TWILIGHT EXPLORER', rank:'DEEP DIVER', sub:'You reached the twilight zone. Most people don\'t go this far. You did.' },
+  { maxDepth: 2000, emoji:'🔵', title:'MIDNIGHT DIVER', rank:'BIOLUMINESCENT', sub:'You entered the midnight zone. Fewer than 1% of ocean divers reach this depth.' },
+  { maxDepth: 4000, emoji:'👁️', title:'ABYSS WALKER', rank:'VOID GAZER', sub:'You reached the abyss. You saw things that have no names. Good for you.' },
+  { maxDepth: 6000, emoji:'🌑', title:'HADAL ZONE REACHED', rank:'TRENCH RUNNER', sub:'You reached the abyssal plain. Only deep-sea vehicles go this far. What are you?' },
+  { maxDepth: 10000, emoji:'🏔️', title:'MARIANA DESCENT', rank:'CHALLENGER', sub:'The Mariana Trench. You went all the way. There is nothing deeper. You win.' },
+  { maxDepth: 99999, emoji:'❓', title:'BEYOND EXISTENCE', rank:'UNKNOWN ENTITY', sub:'You went past the bottom. This depth does not exist. Neither do you, apparently.' },
+];
+
+let currentDepth = 0;
+let diving = false;
+let soundEnabled = true;
+let audioCtx = null;
+let isDark = true;
+let journal = JSON.parse(localStorage.getItem('kpDeepJournal') || '[]');
+let bestDepth = parseInt(localStorage.getItem('kpDeepBest') || '0');
+let seenEncounters = new Set();
+let journalOpen = false;
+
+function getAudioCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+
+function playTone(freq, type='sine', gain=0.06, dur=0.3) {
+  if (!soundEnabled) return;
+  try {
+    const ctx = getAudioCtx();
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.type = type; o.frequency.value = freq;
+    g.gain.setValueAtTime(gain, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
+    o.start(); o.stop(ctx.currentTime + dur);
+  } catch(e){}
+}
+
+// Ambient drone
+let droneOsc = null, droneGain = null;
+function startDrone(freq=55, targetGain=0.04) {
+  if (!soundEnabled) return;
+  try {
+    const ctx = getAudioCtx();
+    if (droneOsc) { droneGain.gain.setTargetAtTime(0, ctx.currentTime, 0.5); setTimeout(()=>{try{droneOsc.stop();}catch(e){}}, 600); }
+    droneOsc = ctx.createOscillator();
+    droneGain = ctx.createGain();
+    droneOsc.connect(droneGain); droneGain.connect(ctx.destination);
+    droneOsc.type = 'sine'; droneOsc.frequency.value = freq;
+    droneGain.gain.setValueAtTime(0, ctx.currentTime);
+    droneGain.gain.setTargetAtTime(targetGain, ctx.currentTime, 1);
+    droneOsc.start();
+  } catch(e){}
+}
+function stopDrone() {
+  if (!droneGain || !audioCtx) return;
+  try { droneGain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.5); setTimeout(()=>{try{droneOsc&&droneOsc.stop();}catch(e){}droneOsc=null;droneGain=null;}, 700); } catch(e){}
+}
+
+function buildBubbles() {
+  const c = document.getElementById('bubbleContainer');
+  c.innerHTML = '';
+  for (let i = 0; i < 25; i++) {
+    const b = document.createElement('div');
+    b.className = 'bubble';
+    const size = 4 + Math.random() * 16;
+    b.style.cssText = `width:${size}px;height:${size}px;left:${Math.random()*100}%;bottom:0;--dur:${4+Math.random()*8}s;--delay:${Math.random()*6}s;--drift:${(Math.random()-0.5)*40}px`;
+    c.appendChild(b);
+  }
+}
+
+function showCreature(emoji, side = 'left') {
+  const c = document.createElement('div');
+  c.className = 'creature';
+  c.textContent = emoji;
+  c.style[side] = `${Math.random() * 60}px`;
+  c.style.top = `${20 + Math.random() * 60}%`;
+  document.getElementById('creatureContainer').appendChild(c);
+  requestAnimationFrame(() => {
+    c.classList.add('appear');
+    c.style.transform = side === 'left' ? 'translateX(15px)' : 'translateX(-15px)';
+  });
+  setTimeout(() => {
+    c.classList.remove('appear');
+    setTimeout(() => c.remove(), 2500);
+  }, 4000);
+}
+
+function getZone(depth) {
+  for (const z of ZONES) { if (depth <= z.maxDepth) return z; }
+  return ZONES[ZONES.length - 1];
+}
+
+function getEncounters(depth) {
+  return ENCOUNTERS.filter(e => depth >= e.min && depth <= e.max);
+}
+
+function pickEncounter(depth) {
+  const available = getEncounters(depth);
+  if (!available.length) return null;
+  // Prefer unseen
+  const unseen = available.filter(e => !seenEncounters.has(e.title));
+  const pool = unseen.length ? unseen : available;
+  const picked = pool[Math.floor(Math.random() * pool.length)];
+  seenEncounters.add(picked.title);
+  return picked;
+}
+
+function updateUI(depth) {
+  const zone = getZone(depth);
+  const maxD = 11000;
+  const pct = Math.min((depth / maxD) * 100, 100);
+
+  document.getElementById('depthNum').textContent = depth.toLocaleString();
+  document.getElementById('depthZone').textContent = zone.name;
+  document.getElementById('depthNum').style.color = zone.textColor;
+
+  document.getElementById('gaugeFill').style.height = pct + '%';
+  document.getElementById('gaugeMarker').textContent = depth < 1000 ? depth + 'm' : (depth/1000).toFixed(1) + 'km';
+
+  const atm = Math.round(1 + depth / 10);
+  const temp = depth < 200 ? 20 - depth * 0.08 : depth < 1000 ? 4 : -1;
+  document.getElementById('pressureText').textContent = `PRESSURE: ${atm} ATM · TEMP: ${Math.max(-2,temp).toFixed(0)}°C`;
+  document.getElementById('pressureText').style.color = depth > 4000 ? '#f87171' : depth > 1000 ? '#a78bfa' : '';
+
+  // Background color
+  const bgColors = ['#001833','#000d1f','#000814','#000408','#000002'];
+  const zIdx = ZONES.findIndex(z => depth <= z.maxDepth);
+  const bg = bgColors[Math.min(zIdx < 0 ? 4 : zIdx, 4)];
+  document.getElementById('oceanWrap').style.background = bg;
+
+  // Vignette intensity
+  const vig = Math.min(depth / 4000, 1);
+  document.getElementById('vignette').style.opacity = 0.4 + vig * 0.5;
+}
+
+function showEncounter(enc) {
+  const el = document.getElementById('encounter');
+  el.classList.remove('show');
+  setTimeout(() => {
+    document.getElementById('encEmoji').textContent = enc.emoji;
+    document.getElementById('encTitle').textContent = enc.title;
+    document.getElementById('encText').textContent = enc.text;
+    el.classList.add('show');
+
+    // Show edge creature for certain depth ranges
+    if (currentDepth > 1000 && Math.random() < 0.4) {
+      const creatures = ['👁️','🦑','🐙','🪼','🦴','🌀'];
+      showCreature(creatures[Math.floor(Math.random()*creatures.length)], Math.random() < 0.5 ? 'left' : 'right');
+    }
+  }, 150);
+}
+
+function dive() {
+  if (diving) return;
+  diving = true;
+
+  // Depth increment: starts small, gets bigger
+  const baseInc = currentDepth < 200 ? 30 + Math.floor(Math.random()*40)
+    : currentDepth < 1000 ? 80 + Math.floor(Math.random()*120)
+    : currentDepth < 4000 ? 200 + Math.floor(Math.random()*300)
+    : 400 + Math.floor(Math.random()*600);
+
+  currentDepth = Math.round((currentDepth + baseInc) / 10) * 10;
+
+  // Sound: lower pitch as deeper
+  const freq = Math.max(40, 200 - currentDepth / 60);
+  playTone(freq, 'sine', 0.06, 0.3);
+  startDrone(Math.max(30, 55 - currentDepth/200), 0.03 + Math.min(currentDepth/4000, 0.04));
+
+  updateUI(currentDepth);
+  const enc = pickEncounter(currentDepth);
+  if (enc) showEncounter(enc);
+
+  document.getElementById('surfaceBtn').style.display = 'block';
+  document.getElementById('diveBtn').textContent = '▼ GO DEEPER';
+
+  // Special milestones
+  if (currentDepth >= 200 && currentDepth < 400) showToast('ENTERING TWILIGHT ZONE');
+  if (currentDepth >= 1000 && currentDepth < 1200) showToast('MIDNIGHT ZONE — LIGHT GONE');
+  if (currentDepth >= 4000 && currentDepth < 4400) showToast('ABYSSAL ZONE — NO RETURN POINT');
+  if (currentDepth >= 6000 && currentDepth < 6400) showToast('HADAL ZONE — YOU SHOULD LEAVE');
+  if (currentDepth >= 11000) { showToast('MAXIMUM DEPTH REACHED'); endGame(true); return; }
+
+  diving = false;
+}
+
+function surface() {
+  endGame(false);
+}
+
+function endGame(maxed) {
+  stopDrone();
+  if (currentDepth > bestDepth) {
+    bestDepth = currentDepth;
+    localStorage.setItem('kpDeepBest', bestDepth);
+    // Save to journal
+    const entry = { depth: currentDepth, date: new Date().toLocaleDateString(), maxed };
+    journal.unshift(entry);
+    if (journal.length > 20) journal.pop();
+    localStorage.setItem('kpDeepJournal', JSON.stringify(journal));
+    renderJournal();
+  }
+
+  const msg = SURFACE_MESSAGES.find(m => currentDepth <= m.maxDepth) || SURFACE_MESSAGES[SURFACE_MESSAGES.length-1];
+
+  document.getElementById('resultEmoji').textContent = msg.emoji;
+  document.getElementById('resultTitle').textContent = maxed ? 'MAXIMUM DEPTH' : 'SURFACED';
+  document.getElementById('resultDepth').textContent = currentDepth.toLocaleString() + 'm';
+  document.getElementById('resultRank').textContent = '[ ' + msg.rank + ' ]';
+  document.getElementById('resultSub').textContent = msg.sub;
+  document.getElementById('bestDepthDisplay').textContent = `PERSONAL BEST: ${bestDepth.toLocaleString()}m`;
+  document.getElementById('resultScreen').classList.add('show');
+
+  if (maxed) { playChord([523,659,784,1047]); }
+  else { playTone(220,'sine',0.06,0.6); setTimeout(()=>playTone(330,'sine',0.05,0.4),200); }
+}
+
+function playChord(freqs) {
+  freqs.forEach((f,i)=>setTimeout(()=>playTone(f,'sine',0.07,0.5),i*100));
+}
+
+function restart() {
+  currentDepth = 0; diving = false; seenEncounters.clear();
+  document.getElementById('resultScreen').classList.remove('show');
+  document.getElementById('surfaceBtn').style.display = 'none';
+  document.getElementById('diveBtn').textContent = '▼ DIVE DEEPER';
+  updateUI(0);
+  document.getElementById('oceanWrap').style.background = '#001833';
+  document.getElementById('encounter').classList.remove('show');
+  document.getElementById('encEmoji').textContent = '🌊';
+  document.getElementById('encTitle').textContent = 'SURFACE';
+  document.getElementById('encText').textContent = 'The water is warm and clear. Light filters down from above. Everything feels safe.';
+  document.getElementById('vignette').style.opacity = '0.4';
+  document.getElementById('depthNum').textContent = '0';
+  document.getElementById('depthNum').style.color = '';
+  document.getElementById('depthZone').textContent = 'SUNLIGHT ZONE';
+  document.getElementById('gaugeFill').style.height = '0%';
+  document.getElementById('gaugeMarker').textContent = '0m';
+  document.getElementById('pressureText').textContent = 'PRESSURE: 1 ATM · TEMP: 20°C';
+  document.getElementById('pressureText').style.color = '';
+  document.getElementById('creatureContainer').innerHTML = '';
+  stopDrone();
+}
+
+function shareResult() {
+  const text = `I dove ${currentDepth.toLocaleString()}m in DEEP DIVE by KP Games — rank: ${
+    (SURFACE_MESSAGES.find(m=>currentDepth<=m.maxDepth)||SURFACE_MESSAGES[SURFACE_MESSAGES.length-1]).rank
+  }. How deep can you go?`;
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(text).then(()=>showToast('COPIED TO CLIPBOARD'));
+  }
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+function toggleJournal() {
+  journalOpen = !journalOpen;
+  document.getElementById('journalPanel').classList.toggle('open', journalOpen);
+}
+
+function renderJournal() {
+  const el = document.getElementById('journalEntries');
+  if (!journal.length) { el.innerHTML = '<div class="journal-empty">No dives recorded yet.</div>'; return; }
+  el.innerHTML = journal.map(j => `
+    <div class="journal-entry">
+      <span class="entry-depth">${j.depth.toLocaleString()}m</span> — ${j.date}
+      ${j.maxed ? ' 🏆' : ''}
+    </div>
+  `).join('');
+}
+
+function toggleSound() {
+  soundEnabled = !soundEnabled;
+  document.getElementById('soundBtn').textContent = soundEnabled ? '🔊' : '🔇';
+  if (!soundEnabled && droneOsc) stopDrone();
+  if (soundEnabled) playTone(440,'sine',0.05,0.1);
+}
+
+function toggleTheme() {
+  isDark = !isDark;
+  document.documentElement.dataset.theme = isDark ? 'dark' : 'light';
+  document.getElementById('themeBtn').textContent = isDark ? '🌙' : '☀️';
+}
+
+// Keyboard
+document.addEventListener('keydown', e => {
+  if (e.code === 'Space' || e.code === 'ArrowDown') { e.preventDefault(); if (!document.getElementById('resultScreen').classList.contains('show')) dive(); }
+  if (e.code === 'Escape') if (journalOpen) toggleJournal();
+});
+
+buildBubbles();
+renderJournal();
+document.getElementById('encounter').classList.add('show');
+</script>
+</body>
+</html>
